@@ -11,86 +11,138 @@
 
 namespace Soochak;
 
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\EventDispatcher\ListenerProviderInterface;
+use Psr\EventDispatcher\StoppableEventInterface;
+
 /**
- * Class EventManager
- * @package Soochak
+ * Event Manager implementation that provides event dispatching capabilities.
+ *
+ * This class implements PSR-14 EventDispatcherInterface and ListenerProviderInterface,
+ * while maintaining backward compatibility with the legacy EventManagerInterface.
+ * It manages event listeners and dispatches events to registered listeners.
+ *
+ * @implements EventManagerInterface
+ * @implements EventDispatcherInterface
+ * @implements ListenerProviderInterface
  */
-class EventManager implements EventManagerInterface
+class EventManager implements EventDispatcherInterface, EventManagerInterface, ListenerProviderInterface
 {
     /**
-     * @var EventListenerQueue[]
+     * The listener provider that manages event listeners.
+     *
+     * @var ListenerProvider
      */
-    protected $listeners = array();
+    protected $listenerProvider;
 
     /**
-     * {@inheritdoc}
+     * Constructs a new EventManager instance.
+     *
+     * Initializes the internal listener provider for managing event listeners.
      */
-    public function attach($event, $callback, $priority = 0)
+    public function __construct()
     {
-        if (false === array_key_exists($event, $this->listeners)) {
-            $this->clearListeners($event instanceof EventInterface ? $event->getName() : $event);
-        }
-        $this->listeners[$event]->insert($callback, $priority);
+        $this->listenerProvider = new ListenerProvider;
     }
 
     /**
-     * {@inheritdoc}
+     * Attaches a listener to an event.
+     *
+     * Registers a callback function to be called when the specified event is triggered.
+     * Listeners with higher priority values are called first.
+     *
+     * @param  string|object  $event  The event name (string) or event object
+     * @param  callable  $callback  The callback function to execute when the event is triggered
+     * @param  int  $priority  The priority of the listener (higher values are called first)
      */
-    public function clearListeners($event)
+    public function attach(string|object $event, callable $callback, int $priority = 0): void
     {
-        $this->listeners[$event] = new EventListenerQueue();
+        $this->listenerProvider->attach($event, $callback, $priority);
     }
 
     /**
-     * {@inheritdoc}
+     * Clears all listeners for a specific event.
+     *
+     * Removes all registered listeners for the given event, effectively resetting
+     * the event's listener queue.
+     *
+     * @param  string|object  $event  The event name (string) or event object
      */
-    public function detach($event, $callback)
+    public function clearListeners(string|object $event): void
     {
-        $found = false;
-        if (array_key_exists($event, $this->listeners)) {
-            $new = new EventListenerQueue();
-            $old = $this->listeners[$event];
-            $old->setExtractFlags(EventListenerQueue::EXTR_BOTH);
-            $old->top();
-            while ($old->valid()) {
-                $item = $old->current();
-                $old->next();
-                if ($item['data'] === $callback) {
-                    $found = true;
-                    continue;
-                }
-                $new->insert($item['data'], $item['priority']);
-            }
-            $this->listeners[$event] = $new;
-        }
-        return $found;
+        $this->listenerProvider->clearListeners($event);
     }
 
     /**
-     * {@inheritdoc}
+     * Detaches a specific listener from an event.
+     *
+     * Removes a previously attached callback from the event's listener queue.
+     *
+     * @param  string|object  $event  The event name (string) or event object
+     * @param  callable  $callback  The callback function to remove
+     * @return bool True if the listener was found and removed, false otherwise
      */
-    public function trigger($event, $params = array())
+    public function detach(string|object $event, callable $callback): bool
     {
-        $result = null;
+        return $this->listenerProvider->detach($event, $callback);
+    }
+
+    /**
+     * Triggers an event with optional parameters.
+     *
+     * This is a legacy method that maintains backward compatibility. It accepts
+     * either a string event name or an EventInterface instance, and optionally
+     * merges provided parameters into the event.
+     *
+     * @param  string|EventInterface  $event  The event name (string) or EventInterface instance
+     * @param  array  $params  Optional parameters to merge into the event
+     * @return object The dispatched event object
+     */
+    public function trigger(string|EventInterface $event, array $params = []): object
+    {
         if ($event instanceof EventInterface) {
-            $name = $event->getName();
             $event->setParams($params);
-        } else {
-            $name = $event;
+        } elseif (! is_object($event)) {
             $event = new Event($event, $params);
         }
-        if (array_key_exists($name, $this->listeners)) {
-            $queue = clone $this->listeners[$event->getName()];
-            $queue->top();
-            while ($queue->valid()) {
-                $callback = $queue->current();
-                $queue->next();
-                $result = call_user_func($callback, $event);
-                if ($event->isPropagationStopped()) {
-                    break;
-                }
+
+        return $this->dispatch($event);
+    }
+
+    /**
+     * Dispatches an event to all registered listeners.
+     *
+     * Implements PSR-14 EventDispatcherInterface. Calls all listeners registered
+     * for the event in priority order. If the event implements StoppableEventInterface
+     * and propagation is stopped, remaining listeners are not called.
+     *
+     * @param  object  $event  The event object to dispatch
+     * @return object The event object that was dispatched (may be modified by listeners)
+     */
+    public function dispatch(object $event): object
+    {
+        $isStoppable = $event instanceof StoppableEventInterface;
+        foreach ($this->listenerProvider->getListenersForEvent($event) as $listener) {
+            $listener($event);
+            if ($isStoppable && $event->isPropagationStopped()) {
+                break;
             }
         }
-        return $result;
+
+        return $event;
+    }
+
+    /**
+     * Gets all listeners for a specific event.
+     *
+     * Implements PSR-14 ListenerProviderInterface. Returns an iterable of callables
+     * that are registered for the given event, ordered by priority.
+     *
+     * @param  object  $event  The event object to get listeners for
+     * @return iterable<callable> An iterable of callable listeners
+     */
+    public function getListenersForEvent(object $event): iterable
+    {
+        return $this->listenerProvider->getListenersForEvent($event);
     }
 }

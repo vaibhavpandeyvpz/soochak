@@ -1,0 +1,154 @@
+<?php
+
+/*
+ * This file is part of vaibhavpandeyvpz/soochak package.
+ *
+ * (c) Vaibhav Pandey <contact@vaibhavpandey.com>
+ *
+ * This source file is subject to the MIT license that is bundled
+ * with this source code in the file LICENSE.md.
+ */
+
+namespace Soochak;
+
+use Psr\EventDispatcher\ListenerProviderInterface;
+
+/**
+ * Listener Provider implementation for managing event listeners.
+ *
+ * This class implements PSR-14 ListenerProviderInterface and manages the
+ * registration and retrieval of event listeners. Listeners are stored in
+ * priority queues to ensure proper execution order.
+ *
+ * @implements ListenerProviderInterface
+ */
+class ListenerProvider implements ListenerProviderInterface
+{
+    /**
+     * Array of event listener queues, indexed by event name.
+     *
+     * @var array<string, EventListenerQueue>
+     */
+    protected $listeners = [];
+
+    /**
+     * Attaches a listener to an event.
+     *
+     * Registers a callback function for the specified event with the given priority.
+     * If no queue exists for the event, one is created automatically.
+     *
+     * @param  string|object  $event  The event name (string) or event object
+     * @param  callable  $callback  The callback function to register
+     * @param  int  $priority  The priority of the listener (higher values are called first)
+     */
+    public function attach(string|object $event, callable $callback, int $priority = 0): void
+    {
+        $eventName = $this->getEventName($event);
+        if (! isset($this->listeners[$eventName])) {
+            $this->listeners[$eventName] = new EventListenerQueue;
+        }
+
+        $this->listeners[$eventName]->insert($callback, $priority);
+    }
+
+    /**
+     * Clears all listeners for a specific event.
+     *
+     * Removes all registered listeners for the given event by replacing the
+     * listener queue with a new empty queue.
+     *
+     * @param  string|object  $event  The event name (string) or event object
+     */
+    public function clearListeners(string|object $event): void
+    {
+        $eventName = $this->getEventName($event);
+        $this->listeners[$eventName] = new EventListenerQueue;
+    }
+
+    /**
+     * Detaches a specific listener from an event.
+     *
+     * Removes a previously attached callback from the event's listener queue.
+     * This operation rebuilds the queue without the specified listener.
+     *
+     * @param  string|object  $event  The event name (string) or event object
+     * @param  callable  $callback  The callback function to remove
+     * @return bool True if the listener was found and removed, false otherwise
+     */
+    public function detach(string|object $event, callable $callback): bool
+    {
+        $eventName = $this->getEventName($event);
+        $found = false;
+        if (isset($this->listeners[$eventName])) {
+            $new = new EventListenerQueue;
+            $old = $this->listeners[$eventName];
+            $old->setExtractFlags(EventListenerQueue::EXTR_BOTH);
+            $old->top();
+            while ($old->valid()) {
+                $item = $old->current();
+                $old->next();
+                if ($item['data'] === $callback) {
+                    $found = true;
+
+                    continue;
+                }
+                $new->insert($item['data'], $item['priority']);
+            }
+
+            $this->listeners[$eventName] = $new;
+        }
+
+        return $found;
+    }
+
+    /**
+     * Gets all listeners for a specific event.
+     *
+     * Implements PSR-14 ListenerProviderInterface. Returns a generator that yields
+     * all callables registered for the given event, ordered by priority (highest first).
+     * If no listeners are registered, returns an empty array.
+     *
+     * @param  object  $event  The event object to get listeners for
+     * @return iterable<callable> A generator yielding callable listeners
+     */
+    public function getListenersForEvent(object $event): iterable
+    {
+        $eventName = $this->getEventName($event);
+        if (! isset($this->listeners[$eventName])) {
+            return [];
+        }
+
+        $queue = clone $this->listeners[$eventName];
+        if ($queue->isEmpty()) {
+            return [];
+        }
+
+        $queue->top();
+        while ($queue->valid()) {
+            yield $queue->current();
+            $queue->next();
+        }
+    }
+
+    /**
+     * Extracts the event name from an event identifier.
+     *
+     * Converts various event representations (string, EventInterface, or object)
+     * into a canonical string name for internal storage and lookup.
+     *
+     * @param  string|object  $event  The event identifier (string, EventInterface, or object)
+     * @return string The canonical event name
+     */
+    protected function getEventName(string|object $event): string
+    {
+        if ($event instanceof EventInterface) {
+            return $event->getName();
+        }
+
+        if (is_object($event)) {
+            return get_class($event);
+        }
+
+        return $event;
+    }
+}

@@ -11,61 +11,89 @@
 
 namespace Soochak;
 
+use Psr\EventDispatcher\StoppableEventInterface;
+
 /**
- * Interface EventInterface
- * @package Soochak
+ * Event interface for representing events in the event system.
+ *
+ * This interface extends PSR-14 StoppableEventInterface and provides methods
+ * for managing event names, parameters, targets, and propagation control.
+ *
+ * @extends StoppableEventInterface
  */
-interface EventInterface
+interface EventInterface extends StoppableEventInterface
 {
     /**
-     * @return string
+     * Gets the event name.
+     *
+     * @return string The name of the event
      */
-    public function getName();
+    public function getName(): string;
 
     /**
-     * @param string $name
-     * @return mixed
+     * Gets a specific parameter value by name.
+     *
+     * @param  string  $name  The parameter name
+     * @return mixed The parameter value, or null if not found
      */
-    public function getParam($name);
+    public function getParam(string $name): mixed;
 
     /**
-     * @return array
+     * Gets all event parameters.
+     *
+     * @return array<string, mixed> All event parameters as key-value pairs
      */
-    public function getParams();
+    public function getParams(): array;
 
     /**
-     * @return null|string|object
+     * Gets the event target.
+     *
+     * The target represents the object or context that triggered the event.
+     *
+     * @return string|object|null The event target, or null if not set
      */
-    public function getTarget();
+    public function getTarget(): string|object|null;
 
     /**
-     * @param string $key
-     * @return bool
+     * Checks if a parameter exists.
+     *
+     * @param  string  $key  The parameter key to check
+     * @return bool True if the parameter exists, false otherwise
      */
-    public function hasParam($key);
+    public function hasParam(string $key): bool;
 
     /**
-     * @return bool
+     * Checks if event propagation has been stopped.
+     *
+     * @return bool True if propagation is stopped, false otherwise
      */
-    public function isPropagationStopped();
+    public function isPropagationStopped(): bool;
 
     /**
-     * @param string $name
+     * Sets the event name.
+     *
+     * @param  string  $name  The event name
      */
-    public function setName($name);
+    public function setName(string $name): void;
 
     /**
-     * @param array $params
+     * Sets all event parameters.
+     *
+     * @param  array<string, mixed>  $params  The event parameters as key-value pairs
      */
-    public function setParams(array $params);
+    public function setParams(array $params): void;
 
     /**
-     * @param null|string|object $target
+     * Sets the event target.
+     *
+     * @param  string|object|null  $target  The event target
      */
-    public function setTarget($target);
+    public function setTarget(string|object|null $target): void;
 
     /**
-     * @param bool $flag
+     * Stops event propagation.
+     *
+     * @param  bool  $flag  Whether to stop propagation (default: true)
      */
-    public function stopPropagation($flag);
+    public function stopPropagation(bool $flag = true): void;
 }

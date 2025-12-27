@@ -3,7 +3,7 @@
 [![Latest Version](https://img.shields.io/packagist/v/vaibhavpandeyvpz/soochak.svg?style=flat-square)](https://packagist.org/packages/vaibhavpandeyvpz/soochak)
 [![Downloads](https://img.shields.io/packagist/dt/vaibhavpandeyvpz/soochak.svg?style=flat-square)](https://packagist.org/packages/vaibhavpandeyvpz/soochak)
 [![PHP Version](https://img.shields.io/packagist/php-v/vaibhavpandeyvpz/soochak.svg?style=flat-square)](https://packagist.org/packages/vaibhavpandeyvpz/soochak)
-[![License](https://img.shields.io/packagist/l/vaibhavpandeyvpz/soochak.svg?style=flat-square)](LICENSE.md)
+[![License](https://img.shields.io/packagist/l/vaibhavpandeyvpz/soochak.svg?style=flat-square)](LICENSE)
 [![Code Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg?style=flat-square)](https://github.com/vaibhavpandeyvpz/soochak)
 
 > **Soochak** (`सूचक`) - A modern, PSR-14 compliant event dispatcher for PHP 8.2+
@@ -296,7 +296,7 @@ Soochak is designed for performance:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 

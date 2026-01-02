@@ -52,10 +52,10 @@ $em->attach('user.created', function (EventInterface $event) {
     echo "User {$user['name']} was created!";
 });
 
-// Trigger the event with parameters
-$em->trigger('user.created', [
+// Dispatch the event with parameters
+$em->dispatch(new Event('user.created', [
     'user' => ['name' => 'John Doe', 'email' => 'john@example.com']
-]);
+]));
 ```
 
 ### Using PSR-14 Standard API
@@ -97,7 +97,7 @@ $em->attach('order.completed', function (EventInterface $event) {
     echo "Updating inventory...\n";
 }, 20);
 
-$em->trigger('order.completed');
+$em->dispatch(new Event('order.completed'));
 // Output:
 // Updating inventory...
 // Sending email notification...
@@ -122,7 +122,7 @@ $em->attach('request.validate', function (EventInterface $event) {
 });
 
 $event = new Event('request.validate', ['invalid' => true]);
-$em->trigger($event);
+$em->dispatch($event);
 ```
 
 ### Working with Event Objects
@@ -146,8 +146,8 @@ if ($event->hasParam('amount')) {
     echo "Processing payment of {$amount}\n";
 }
 
-// Trigger the event
-$em->trigger($event);
+// Dispatch the event
+$em->dispatch($event);
 ```
 
 ### Custom Event Objects
@@ -196,7 +196,7 @@ $em->attach('test.event', $listener);
 $em->detach('test.event', $listener);
 
 // Clear all listeners for an event
-$em->clearListeners('test.event');
+$em->clear('test.event');
 ```
 
 ### Getting Listeners for an Event
@@ -223,8 +223,7 @@ The main event manager class implementing PSR-14 interfaces.
 
 - `attach(string|object $event, callable $callback, int $priority = 0): void` - Attach a listener to an event
 - `detach(string|object $event, callable $callback): bool` - Remove a specific listener
-- `clearListeners(string|object $event): void` - Clear all listeners for an event
-- `trigger(string|EventInterface $event, array $params = []): object` - Trigger an event (legacy API)
+- `clear(string|object $event): void` - Clear all listeners for an event
 - `dispatch(object $event): object` - Dispatch an event (PSR-14)
 - `getListenersForEvent(object $event): iterable` - Get all listeners for an event (PSR-14)
 
@@ -283,8 +282,7 @@ Soochak is designed for performance:
 
 ### Components
 
-- **EventManager** - Main dispatcher implementing PSR-14 interfaces
-- **ListenerProvider** - Manages listener registration and retrieval
+- **EventManager** - Main dispatcher implementing PSR-14 interfaces, manages listener registration and retrieval
 - **Event** - Standard event implementation
 - **EventListenerQueue** - Priority queue for listener ordering
 

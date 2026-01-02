@@ -11,14 +11,19 @@
 
 namespace Soochak;
 
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\EventDispatcher\ListenerProviderInterface;
+
 /**
  * Event Manager interface for managing events and listeners.
  *
- * This interface defines the contract for event management, including attaching
- * listeners, triggering events, and managing listener queues. It provides a
- * backward-compatible API for event handling.
+ * This interface extends PSR-14 EventDispatcherInterface and ListenerProviderInterface,
+ * while providing additional backward-compatible methods for event handling.
+ *
+ * @extends EventDispatcherInterface
+ * @extends ListenerProviderInterface
  */
-interface EventManagerInterface
+interface EventManagerInterface extends EventDispatcherInterface, ListenerProviderInterface
 {
     /**
      * Attaches a listener to an event.
@@ -39,7 +44,7 @@ interface EventManagerInterface
      *
      * @param  string|object  $event  The event name (string) or event object
      */
-    public function clearListeners(string|object $event): void;
+    public function clear(string|object $event): void;
 
     /**
      * Detaches a specific listener from an event.
@@ -51,17 +56,4 @@ interface EventManagerInterface
      * @return bool True if the listener was found and removed, false otherwise
      */
     public function detach(string|object $event, callable $callback): bool;
-
-    /**
-     * Triggers an event with optional parameters.
-     *
-     * Dispatches an event to all registered listeners. Accepts either a string
-     * event name or an EventInterface instance, and optionally merges provided
-     * parameters into the event.
-     *
-     * @param  string|EventInterface  $event  The event name (string) or EventInterface instance
-     * @param  array<string, mixed>  $params  Optional parameters to merge into the event
-     * @return object The dispatched event object
-     */
-    public function trigger(string|EventInterface $event, array $params = []): object;
 }

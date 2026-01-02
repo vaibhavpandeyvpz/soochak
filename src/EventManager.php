@@ -11,39 +11,26 @@
 
 namespace Soochak;
 
-use Psr\EventDispatcher\EventDispatcherInterface;
-use Psr\EventDispatcher\ListenerProviderInterface;
 use Psr\EventDispatcher\StoppableEventInterface;
 
 /**
  * Event Manager implementation that provides event dispatching capabilities.
  *
- * This class implements PSR-14 EventDispatcherInterface and ListenerProviderInterface,
- * while maintaining backward compatibility with the legacy EventManagerInterface.
- * It manages event listeners and dispatches events to registered listeners.
+ * This class implements EventManagerInterface which extends PSR-14 EventDispatcherInterface
+ * and ListenerProviderInterface. It manages event listeners and dispatches events to
+ * registered listeners, providing both PSR-14 standard methods and backward-compatible
+ * legacy methods.
  *
  * @implements EventManagerInterface
- * @implements EventDispatcherInterface
- * @implements ListenerProviderInterface
  */
-class EventManager implements EventDispatcherInterface, EventManagerInterface, ListenerProviderInterface
+class EventManager implements EventManagerInterface
 {
     /**
-     * The listener provider that manages event listeners.
+     * Array of event listener queues, indexed by event name.
      *
-     * @var ListenerProvider
+     * @var array<string, EventListenerQueue>
      */
-    protected $listenerProvider;
-
-    /**
-     * Constructs a new EventManager instance.
-     *
-     * Initializes the internal listener provider for managing event listeners.
-     */
-    public function __construct()
-    {
-        $this->listenerProvider = new ListenerProvider;
-    }
+    protected $listeners = [];
 
     /**
      * Attaches a listener to an event.
@@ -57,7 +44,12 @@ class EventManager implements EventDispatcherInterface, EventManagerInterface, L
      */
     public function attach(string|object $event, callable $callback, int $priority = 0): void
     {
-        $this->listenerProvider->attach($event, $callback, $priority);
+        $eventName = $this->getEventName($event);
+        if (! isset($this->listeners[$eventName])) {
+            $this->listeners[$eventName] = new EventListenerQueue;
+        }
+
+        $this->listeners[$eventName]->insert($callback, $priority);
     }
 
     /**
@@ -68,9 +60,10 @@ class EventManager implements EventDispatcherInterface, EventManagerInterface, L
      *
      * @param  string|object  $event  The event name (string) or event object
      */
-    public function clearListeners(string|object $event): void
+    public function clear(string|object $event): void
     {
-        $this->listenerProvider->clearListeners($event);
+        $eventName = $this->getEventName($event);
+        $this->listeners[$eventName] = new EventListenerQueue;
     }
 
     /**
@@ -84,29 +77,34 @@ class EventManager implements EventDispatcherInterface, EventManagerInterface, L
      */
     public function detach(string|object $event, callable $callback): bool
     {
-        return $this->listenerProvider->detach($event, $callback);
-    }
+        $eventName = $this->getEventName($event);
+        $found = false;
+        if (isset($this->listeners[$eventName])) {
+            $old = $this->listeners[$eventName];
 
-    /**
-     * Triggers an event with optional parameters.
-     *
-     * This is a legacy method that maintains backward compatibility. It accepts
-     * either a string event name or an EventInterface instance, and optionally
-     * merges provided parameters into the event.
-     *
-     * @param  string|EventInterface  $event  The event name (string) or EventInterface instance
-     * @param  array  $params  Optional parameters to merge into the event
-     * @return object The dispatched event object
-     */
-    public function trigger(string|EventInterface $event, array $params = []): object
-    {
-        if ($event instanceof EventInterface) {
-            $event->setParams($params);
-        } elseif (! is_object($event)) {
-            $event = new Event($event, $params);
+            // Check if the queue is empty before calling top()
+            if ($old->isEmpty()) {
+                return false;
+            }
+
+            $new = new EventListenerQueue;
+            $old->setExtractFlags(EventListenerQueue::EXTR_BOTH);
+            $old->top();
+            while ($old->valid()) {
+                $item = $old->current();
+                $old->next();
+                if ($item['data'] === $callback) {
+                    $found = true;
+
+                    continue;
+                }
+                $new->insert($item['data'], $item['priority']);
+            }
+
+            $this->listeners[$eventName] = $new;
         }
 
-        return $this->dispatch($event);
+        return $found;
     }
 
     /**
@@ -122,7 +120,7 @@ class EventManager implements EventDispatcherInterface, EventManagerInterface, L
     public function dispatch(object $event): object
     {
         $isStoppable = $event instanceof StoppableEventInterface;
-        foreach ($this->listenerProvider->getListenersForEvent($event) as $listener) {
+        foreach ($this->getListenersForEvent($event) as $listener) {
             $listener($event);
             if ($isStoppable && $event->isPropagationStopped()) {
                 break;
@@ -135,14 +133,51 @@ class EventManager implements EventDispatcherInterface, EventManagerInterface, L
     /**
      * Gets all listeners for a specific event.
      *
-     * Implements PSR-14 ListenerProviderInterface. Returns an iterable of callables
-     * that are registered for the given event, ordered by priority.
+     * Implements PSR-14 ListenerProviderInterface. Returns a generator that yields
+     * all callables registered for the given event, ordered by priority (highest first).
+     * If no listeners are registered, returns an empty array.
      *
      * @param  object  $event  The event object to get listeners for
-     * @return iterable<callable> An iterable of callable listeners
+     * @return iterable<callable> A generator yielding callable listeners
      */
     public function getListenersForEvent(object $event): iterable
     {
-        return $this->listenerProvider->getListenersForEvent($event);
+        $eventName = $this->getEventName($event);
+        if (! isset($this->listeners[$eventName])) {
+            return [];
+        }
+
+        $queue = clone $this->listeners[$eventName];
+        if ($queue->isEmpty()) {
+            return [];
+        }
+
+        $queue->top();
+        while ($queue->valid()) {
+            yield $queue->current();
+            $queue->next();
+        }
+    }
+
+    /**
+     * Extracts the event name from an event identifier.
+     *
+     * Converts various event representations (string, EventInterface, or object)
+     * into a canonical string name for internal storage and lookup.
+     *
+     * @param  string|object  $event  The event identifier (string, EventInterface, or object)
+     * @return string The canonical event name
+     */
+    protected function getEventName(string|object $event): string
+    {
+        if ($event instanceof EventInterface) {
+            return $event->getName();
+        }
+
+        if (is_object($event)) {
+            return get_class($event);
+        }
+
+        return $event;
     }
 }

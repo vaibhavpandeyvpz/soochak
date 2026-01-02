@@ -16,17 +16,17 @@ namespace Soochak;
  */
 class EventManagerTest extends \PHPUnit\Framework\TestCase
 {
-    public function test_trigger()
+    public function test_dispatch_with_string_event_name()
     {
         $em = new EventManager;
         $em->attach('dummy', function (EventInterface $event) {
             echo $event->getName();
         });
         $this->expectOutputString('dummy');
-        $em->trigger('dummy');
+        $em->dispatch(new Event('dummy'));
     }
 
-    public function test_trigger_with_priority()
+    public function test_dispatch_with_priority()
     {
         $em = new EventManager;
         $em->attach('login', function (EventInterface $event) {
@@ -36,7 +36,7 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
             echo $event->getName().':20';
         }, 20);
         $this->expectOutputString('login:20'.'login:10');
-        $em->trigger('login');
+        $em->dispatch(new Event('login'));
     }
 
     public function test_detach()
@@ -50,7 +50,7 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
         });
         $em->detach('login', $detached);
         $this->expectOutputString('login:10');
-        $em->trigger('login');
+        $em->dispatch(new Event('login'));
     }
 
     public function test_stop_propagation()
@@ -64,7 +64,7 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
             echo $event->getName().':20';
         });
         $this->expectOutputString('login:10');
-        $em->trigger($event = new Event('login'));
+        $em->dispatch($event = new Event('login'));
         $this->assertTrue($event->isPropagationStopped());
     }
 
@@ -77,23 +77,23 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
         $em->attach('logout', function (EventInterface $event) {
             echo 'listener2';
         });
-        $em->clearListeners('logout');
+        $em->clear('logout');
         $this->expectOutputString('');
-        $em->trigger('logout');
+        $em->dispatch(new Event('logout'));
     }
 
-    public function test_trigger_with_params()
+    public function test_dispatch_with_params()
     {
         $em = new EventManager;
         $captured = null;
         $em->attach('user.created', function (EventInterface $event) use (&$captured) {
             $captured = $event->getParams();
         });
-        $em->trigger('user.created', ['id' => 123, 'name' => 'John']);
+        $em->dispatch(new Event('user.created', ['id' => 123, 'name' => 'John']));
         $this->assertEquals(['id' => 123, 'name' => 'John'], $captured);
     }
 
-    public function test_trigger_with_event_object()
+    public function test_dispatch_with_event_object_and_params()
     {
         $em = new EventManager;
         $event = new Event('custom.event', ['data' => 'test']);
@@ -101,7 +101,8 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
         $em->attach('custom.event', function (EventInterface $e) use (&$captured) {
             $captured = $e->getParams();
         });
-        $em->trigger($event, ['additional' => 'param']);
+        $event->setParams(['additional' => 'param']);
+        $em->dispatch($event);
         $this->assertEquals(['additional' => 'param'], $captured);
         $this->assertEquals(['additional' => 'param'], $event->getParams());
     }
@@ -159,8 +160,8 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
         $em->attach('event2', function () use (&$results) {
             $results[] = 'event2';
         });
-        $em->trigger('event1');
-        $em->trigger('event2');
+        $em->dispatch(new Event('event1'));
+        $em->dispatch(new Event('event2'));
         $this->assertEquals(['event1', 'event2'], $results);
     }
 
@@ -186,7 +187,7 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
             $event->setParams(['modified' => true]);
         });
         $event = new Event('modify', ['original' => true]);
-        $em->trigger($event);
+        $em->dispatch($event);
         $this->assertTrue($event->hasParam('modified'));
         $this->assertTrue($event->getParam('modified'));
     }
@@ -203,7 +204,7 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
             $results[] = 'second';
         });
         $event = new Event('test');
-        $em->trigger($event);
+        $em->dispatch($event);
         $this->assertEquals(['first'], $results);
         $event->stopPropagation(false);
         $this->assertFalse($event->isPropagationStopped());
@@ -225,5 +226,128 @@ class EventManagerTest extends \PHPUnit\Framework\TestCase
         });
         $em->dispatch($nonStoppableEvent);
         $this->assertEquals(['first', 'second'], $results);
+    }
+
+    public function test_attach_with_string_event_via_get_listeners()
+    {
+        $em = new EventManager;
+        $called = false;
+        $em->attach('test.event', function () use (&$called) {
+            $called = true;
+        });
+        $event = new Event('test.event');
+        foreach ($em->getListenersForEvent($event) as $listener) {
+            $listener($event);
+        }
+        $this->assertTrue($called);
+    }
+
+    public function test_attach_with_event_object_via_get_listeners()
+    {
+        $em = new EventManager;
+        $called = false;
+        $customEvent = new class
+        {
+            public string $name = 'custom';
+        };
+        $em->attach($customEvent, function () use (&$called) {
+            $called = true;
+        });
+        foreach ($em->getListenersForEvent($customEvent) as $listener) {
+            $listener($customEvent);
+        }
+        $this->assertTrue($called);
+    }
+
+    public function test_attach_with_priority_via_get_listeners()
+    {
+        $em = new EventManager;
+        $results = [];
+        $em->attach('test', function () use (&$results) {
+            $results[] = 'low';
+        }, 1);
+        $em->attach('test', function () use (&$results) {
+            $results[] = 'high';
+        }, 10);
+        $event = new Event('test');
+        foreach ($em->getListenersForEvent($event) as $listener) {
+            $listener($event);
+        }
+        $this->assertEquals(['high', 'low'], $results);
+    }
+
+    public function test_clear_listeners_via_get_listeners()
+    {
+        $em = new EventManager;
+        $em->attach('test', function () {
+            $this->fail('Should not be called');
+        });
+        $em->clear('test');
+        $event = new Event('test');
+        $listeners = iterator_to_array($em->getListenersForEvent($event));
+        $this->assertEmpty($listeners);
+    }
+
+    public function test_detach_listener_via_get_listeners()
+    {
+        $em = new EventManager;
+        $listener1 = function () {
+            $this->fail('Should not be called');
+        };
+        $listener2 = function () {};
+        $em->attach('test', $listener1);
+        $em->attach('test', $listener2);
+        $result = $em->detach('test', $listener1);
+        $this->assertTrue($result);
+        $event = new Event('test');
+        $listeners = iterator_to_array($em->getListenersForEvent($event));
+        $this->assertCount(1, $listeners);
+        $this->assertContains($listener2, $listeners);
+        $this->assertNotContains($listener1, $listeners);
+    }
+
+    public function test_get_listeners_for_event_nonexistent()
+    {
+        $em = new EventManager;
+        $event = new Event('nonexistent');
+        $listeners = iterator_to_array($em->getListenersForEvent($event));
+        $this->assertEmpty($listeners);
+    }
+
+    public function test_get_listeners_for_event_with_custom_object()
+    {
+        $em = new EventManager;
+        $customEvent = new class
+        {
+            public string $name = 'CustomEvent';
+        };
+        $called = false;
+        $em->attach($customEvent, function () use (&$called) {
+            $called = true;
+        });
+        $listeners = iterator_to_array($em->getListenersForEvent($customEvent));
+        $this->assertCount(1, $listeners);
+        $listeners[0]($customEvent);
+        $this->assertTrue($called);
+    }
+
+    public function test_multiple_listeners_same_priority()
+    {
+        $em = new EventManager;
+        $results = [];
+        $em->attach('test', function () use (&$results) {
+            $results[] = 'first';
+        }, 5);
+        $em->attach('test', function () use (&$results) {
+            $results[] = 'second';
+        }, 5);
+        $em->attach('test', function () use (&$results) {
+            $results[] = 'third';
+        }, 5);
+        $event = new Event('test');
+        foreach ($em->getListenersForEvent($event) as $listener) {
+            $listener($event);
+        }
+        $this->assertEquals(['first', 'second', 'third'], $results);
     }
 }

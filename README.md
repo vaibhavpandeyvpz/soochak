@@ -46,16 +46,13 @@ use Soochak\Event;
 
 $em = new EventManager();
 
-// Attach a listener to an event
-$em->attach('user.created', function (EventInterface $event) {
-    $user = $event->getParam('user');
-    echo "User {$user['name']} was created!";
+// Attach a listener to an event (using class name)
+$em->attach(Event::class, function (Event $event) {
+    echo "Event dispatched!";
 });
 
-// Dispatch the event with parameters
-$em->dispatch(new Event('user.created', [
-    'user' => ['name' => 'John Doe', 'email' => 'john@example.com']
-]));
+// Dispatch the event
+$em->dispatch(new Event());
 ```
 
 ### Using PSR-14 Standard API
@@ -67,10 +64,10 @@ use Soochak\EventManager;
 use Soochak\Event;
 
 $em = new EventManager();
-$event = new Event('user.created', ['user_id' => 123]);
+$event = new Event();
 
 // Attach listener
-$em->attach('user.created', function (object $event) {
+$em->attach(Event::class, function (object $event) {
     // Handle the event
 });
 
@@ -88,16 +85,16 @@ Listeners with higher priority values are executed first:
 $em = new EventManager();
 
 // Lower priority (executed last)
-$em->attach('order.completed', function (EventInterface $event) {
+$em->attach(Event::class, function (Event $event) {
     echo "Sending email notification...\n";
 }, 10);
 
 // Higher priority (executed first)
-$em->attach('order.completed', function (EventInterface $event) {
+$em->attach(Event::class, function (Event $event) {
     echo "Updating inventory...\n";
 }, 20);
 
-$em->dispatch(new Event('order.completed'));
+$em->dispatch(new Event());
 // Output:
 // Updating inventory...
 // Sending email notification...
@@ -110,18 +107,16 @@ Stop further listeners from executing:
 ```php
 $em = new EventManager();
 
-$em->attach('request.validate', function (EventInterface $event) {
-    if ($event->getParam('invalid')) {
-        $event->stopPropagation(true);
-        echo "Validation failed, stopping propagation\n";
-    }
+$em->attach(Event::class, function (Event $event) {
+    $event->stopPropagation(true);
+    echo "Validation failed, stopping propagation\n";
 });
 
-$em->attach('request.validate', function (EventInterface $event) {
+$em->attach(Event::class, function (Event $event) {
     echo "This won't execute if propagation was stopped\n";
 });
 
-$event = new Event('request.validate', ['invalid' => true]);
+$event = new Event();
 $em->dispatch($event);
 ```
 
@@ -130,20 +125,15 @@ $em->dispatch($event);
 ```php
 use Soochak\Event;
 
-// Create an event with parameters
-$event = new Event('payment.processed', [
-    'amount' => 99.99,
-    'currency' => 'USD',
-    'transaction_id' => 'txn_123'
-]);
+// Create an event
+$event = new Event();
 
-// Set event target (optional)
-$event->setTarget($paymentGateway);
+// Stop propagation if needed
+$event->stopPropagation(true);
 
-// Check and modify event
-if ($event->hasParam('amount')) {
-    $amount = $event->getParam('amount');
-    echo "Processing payment of {$amount}\n";
+// Check if propagation is stopped
+if ($event->isPropagationStopped()) {
+    echo "Propagation is stopped\n";
 }
 
 // Dispatch the event
@@ -185,18 +175,18 @@ $em->dispatch($event);
 ```php
 $em = new EventManager();
 
-$listener = function (EventInterface $event) {
+$listener = function (Event $event) {
     echo "Listener executed\n";
 };
 
 // Attach
-$em->attach('test.event', $listener);
+$em->attach(Event::class, $listener);
 
 // Detach
-$em->detach('test.event', $listener);
+$em->detach(Event::class, $listener);
 
 // Clear all listeners for an event
-$em->clear('test.event');
+$em->clear(Event::class);
 ```
 
 ### Getting Listeners for an Event
@@ -204,10 +194,10 @@ $em->clear('test.event');
 ```php
 $em = new EventManager();
 
-$em->attach('test', function () {}, 10);
-$em->attach('test', function () {}, 20);
+$em->attach(Event::class, function () {}, 10);
+$em->attach(Event::class, function () {}, 20);
 
-$event = new Event('test');
+$event = new Event();
 $listeners = iterator_to_array($em->getListenersForEvent($event));
 
 echo count($listeners); // 2
@@ -229,18 +219,10 @@ The main event manager class implementing PSR-14 interfaces.
 
 ### Event
 
-Standard event implementation.
+Minimal event implementation implementing `StoppableEventInterface`.
 
 #### Methods
 
-- `getName(): string` - Get the event name
-- `getParam(string $name): mixed` - Get a parameter value
-- `getParams(): array` - Get all parameters
-- `hasParam(string $key): bool` - Check if a parameter exists
-- `setName(string $name): void` - Set the event name
-- `setParams(array $params): void` - Set all parameters
-- `getTarget(): string|object|null` - Get the event target
-- `setTarget(string|object|null $target): void` - Set the event target
 - `isPropagationStopped(): bool` - Check if propagation is stopped
 - `stopPropagation(bool $flag = true): void` - Stop event propagation
 
@@ -250,7 +232,7 @@ Soochak fully implements the PSR-14 Event Dispatcher standard:
 
 - ✅ `Psr\EventDispatcher\EventDispatcherInterface`
 - ✅ `Psr\EventDispatcher\ListenerProviderInterface`
-- ✅ `Psr\EventDispatcher\StoppableEventInterface` (via EventInterface)
+- ✅ `Psr\EventDispatcher\StoppableEventInterface` (via Event class)
 
 You can use Soochak with any PSR-14 compatible library or framework.
 

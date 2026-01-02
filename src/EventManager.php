@@ -162,18 +162,14 @@ class EventManager implements EventManagerInterface
     /**
      * Extracts the event name from an event identifier.
      *
-     * Converts various event representations (string, EventInterface, or object)
+     * Converts various event representations (string or object)
      * into a canonical string name for internal storage and lookup.
      *
-     * @param  string|object  $event  The event identifier (string, EventInterface, or object)
+     * @param  string|object  $event  The event identifier (string or object)
      * @return string The canonical event name
      */
     protected function getEventName(string|object $event): string
     {
-        if ($event instanceof EventInterface) {
-            return $event->getName();
-        }
-
         if (is_object($event)) {
             return get_class($event);
         }
